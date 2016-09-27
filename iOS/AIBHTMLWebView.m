@@ -9,7 +9,6 @@
 #import "AIBHTMLWebView.h"
 
 #import <UIKit/UIKit.h>
-#import "RCTEventDispatcher.h"
 #import "UIView+React.h"
 #import "RCTView.h"
 
@@ -23,6 +22,9 @@
     UIWebView *_webView;
     BOOL autoHeight;
 }
+
+RCT_EXPORT_VIEW_PROPERTY(onHeightChange, RCTBubblingEventBlock);
+RCT_EXPORT_VIEW_PROPERTY(onLinkPress, RCTBubblingEventBlock);
 
 - (void)setHTML:(NSString *)HTML
 {
@@ -75,17 +77,21 @@
     if (!autoHeight) {
         return;
     }
+
+    if (!reportHeight.onHeightChange) {
+        return;
+    }
+
     CGRect frame = _webView.frame;
     frame.size.height = 1;
     _webView.frame = frame;
     frame.size.height = [[_webView stringByEvaluatingJavaScriptFromString: @"document.documentElement.scrollHeight"] floatValue];
     NSNumber *height = [NSNumber numberWithFloat: frame.size.height];
-    
-    NSMutableDictionary *event = [[NSMutableDictionary alloc] initWithDictionary: @{
-                                                                                    @"target": self.reactTag,
-                                                                                    @"contentHeight": height
-                                                                                    }];
-    [_eventDispatcher sendInputEventWithName:@"changeHeight" body:event];
+
+    reportHeight.onHeightChange(@{
+                @"contentHeight": height
+                }];
+
     _webView.frame = frame;
 }
 
@@ -96,11 +102,14 @@
         // When we load from HTML string it still shows up as a request, so let's let that through
         return YES;
     } else {
-        NSMutableDictionary *event = [[NSMutableDictionary alloc] initWithDictionary: @{
-                                                                                        @"target": self.reactTag,
-                                                                                        @"url": [request.URL absoluteString]
-                                                                                        }];
-        [_eventDispatcher sendInputEventWithName:@"link" body:event];
+        if (!webView.onLinkPress) {
+            return;
+        }
+
+        webView.onLinkPress @{
+                @"url": [request.URL absoluteString]
+                }];
+
         return NO; // Tells the webView not to load the URL
     }
 }
